@@ -1,4 +1,4 @@
-import { CloudEvent, cloudEvent } from '@google-cloud/functions-framework'
+import { cloudEvent } from '@google-cloud/functions-framework'
 import { UserAddCloudEvent, userService } from './user.service'
 import env from './config/env'
 import Email from './model/email.model'
