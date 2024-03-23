@@ -36,10 +36,16 @@ const handleUserAdd = async (addUser?: UserAddCloudEvent) => {
     return
   }
 
-  const authToken = randomString(32)
+  // Do not send email if already sent
+  if (user.email_verification_sent_date) {
+    console.log('Verification email already sent')
+    return
+  }
+
+  const authToken = randomString(128)
 
   // Send verification email
-  sendGridClient.send({
+  const result = await sendGridClient.send({
     to: user.username,
     from: fromEmail,
     subject: 'Verify your email',
@@ -49,8 +55,11 @@ const handleUserAdd = async (addUser?: UserAddCloudEvent) => {
       verifyUrl: getVerifyUrl(user.username, authToken)
     }
   })
-  console.log('Verification email sent')
-
+  console.log('Verification email status: ', result[0].statusCode)
+  if (result[0].statusCode >= 300) {
+    console.error('Error sending verification email')
+    return
+  }
   try {
     user.email_verification_token = authToken
     user.email_verification_sent_date = new Date()
@@ -61,6 +70,7 @@ const handleUserAdd = async (addUser?: UserAddCloudEvent) => {
   }
 
   // Create email record
+  console.log('Creating email record')
   try {
     const email = await Email.create({
       user_id: userId,
