@@ -32,25 +32,26 @@ const validateUserAddEvent = (addUser?: UserAddCloudEvent): boolean => {
 
 /**
  * Handle user add event
- * @param addUser UserAddCloudEvent
+ * @param addUser UserAddCloudEvent User add event
+ * @param messageId string Pub/Sub message ID
  */
-const handleUserAdd = async (addUser?: UserAddCloudEvent) => {
+const handleUserAdd = async (addUser?: UserAddCloudEvent, messageId?: string) => {
   // Validate input
   if (!validateUserAddEvent(addUser)) {
     console.log('Invalid addUser event. Exiting...')
     return
   }
 
-  sendVerificationEmail(addUser)
+  sendVerificationEmail(addUser, messageId)
 }
-
 
 /**
  * Send verification email to user
- * @param addUser UserAddCloudEvent
+ * @param addUser UserAddCloudEvent User add event
+ * @param messageId string Pub/Sub message ID
  * @returns boolean
  */
-const sendVerificationEmail = async (addUser: UserAddCloudEvent) => {
+const sendVerificationEmail = async (addUser: UserAddCloudEvent, messageId?: string) => {
   const { userId, email } = addUser
 
   console.log('Sending verification email for user with ID: ' + userId)
@@ -94,7 +95,8 @@ const sendVerificationEmail = async (addUser: UserAddCloudEvent) => {
       metadata: {
         sendgrid: {
           message_id: result[0].headers['x-message-id']
-        }
+        },
+        pubsub_message_id: messageId || ''
       }
     })
     console.log('Email record created: ', email.id)

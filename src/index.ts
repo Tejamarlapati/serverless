@@ -25,6 +25,8 @@ cloudEvent('addUser', async (cloudEvent: CloudEvent<GoogleCloudEvent>) => {
     return
   }
 
+  const messageId = cloudEvent?.data?.message?.messageId
+
   const decoded = Buffer.from(data as string, 'base64').toString('utf-8')
   let user: UserAddCloudEvent
   try {
@@ -37,5 +39,5 @@ cloudEvent('addUser', async (cloudEvent: CloudEvent<GoogleCloudEvent>) => {
   console.log('Parsed addUser event. UserId: ', user?.userId)
 
   await initializeApp()
-  await userService.handleUserAdd(user)
+  await userService.handleUserAdd(user, messageId)
 })
