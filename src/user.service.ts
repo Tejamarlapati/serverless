@@ -1,58 +1,80 @@
 import env from './config/env'
 import Email from './model/email.model'
-import User from './model/user.model'
 import sendGridClient from '@sendgrid/mail'
-
-sendGridClient.setApiKey(env.getOrDefault('SENDGRID_API_KEY', ''))
-const fromEmail = env.getOrDefault('SENDGRID_FROM_EMAIL', 'signup@tejamarlapati.tech')
-const verifyUrl = env.getOrDefault('VERIFY_URL', 'http://tejamarlapati.tech/v1/user/verify')
-const verifyEmailTemplateId = env.getOrDefault('VERIFY_EMAIL_TEMPLATE_ID', 'd-1201e8b2b4884e10a7335113d40a20aa')
 
 export type UserAddCloudEvent = {
   userId: string
+  email: string
 }
 
-const getVerifyUrl = (email: string, authToken: string) => {
+const getVerifyUrl = (verifyUrl: string, email: string, authToken: string) => {
   return `${verifyUrl}?email=${email}&auth_token=${authToken}`
 }
 
+const validateUserAddEvent = (addUser?: UserAddCloudEvent): boolean => {
+  if (!addUser) {
+    console.error('Missing addUser event')
+    return false
+  }
+
+  if (!addUser.userId) {
+    console.error('Missing userId')
+    return false
+  }
+
+  if (!addUser.email) {
+    console.error('Missing email')
+    return false
+  }
+
+  return true
+}
+
+/**
+ * Handle user add event
+ * @param addUser UserAddCloudEvent
+ */
 const handleUserAdd = async (addUser?: UserAddCloudEvent) => {
   // Validate input
-  const userId = addUser?.userId
-  if (!userId) {
-    console.error('Missing userId')
+  if (!validateUserAddEvent(addUser)) {
+    console.log('Invalid addUser event. Exiting...')
     return
   }
 
-  console.log('Sending verification email for user with ID: ', userId)
-  const user = await User.findByPk(userId)
-  if (!user) {
-    console.error('User not found with id: ' + userId)
-    return
-  }
+  sendVerificationEmail(addUser)
+}
 
-  if (user.email_verified) {
-    console.log('User already verified')
-    return
-  }
 
-  // Do not send email if already sent
-  if (user.email_verification_sent_date) {
-    console.log('Verification email already sent')
+/**
+ * Send verification email to user
+ * @param addUser UserAddCloudEvent
+ * @returns boolean
+ */
+const sendVerificationEmail = async (addUser: UserAddCloudEvent) => {
+  const { userId, email } = addUser
+
+  console.log('Sending verification email for user with ID: ' + userId)
+  const existingEmail = await Email.findOne({ where: { user_id: userId, email_type: 'VERIFY' } })
+  if (existingEmail) {
+    console.error('User Verification email already sent for user: ' + userId)
     return
   }
 
   const authToken = randomString(128)
 
+  const fromEmail = env.getOrDefault('SENDGRID_FROM_EMAIL', '')
+  const verifyUrl = env.getOrDefault('VERIFY_URL', '')
+  const verifyEmailTemplateId = env.getOrDefault('VERIFY_EMAIL_TEMPLATE_ID', '')
+
   // Send verification email
   const result = await sendGridClient.send({
-    to: user.username,
+    to: email,
     from: fromEmail,
     subject: 'Verify your email',
     templateId: verifyEmailTemplateId,
     dynamicTemplateData: {
       subject: 'Thanks for signing up!',
-      verifyUrl: getVerifyUrl(user.username, authToken)
+      verifyUrl: getVerifyUrl(verifyUrl, email, authToken)
     }
   })
   console.log('Verification email status: ', result[0].statusCode)
@@ -60,22 +82,20 @@ const handleUserAdd = async (addUser?: UserAddCloudEvent) => {
     console.error('Error sending verification email')
     return
   }
-  try {
-    user.email_verification_token = authToken
-    user.email_verification_sent_date = new Date()
-    await user.save()
-    console.log('User updated with verification token')
-  } catch (e) {
-    console.error(`Error saving user: ${e.message}`)
-  }
 
   // Create email record
   console.log('Creating email record')
   try {
     const email = await Email.create({
       user_id: userId,
-      email_type: 'verification',
-      send_date: new Date()
+      sent_date: new Date(),
+      email_type: 'VERIFY',
+      auth_token: authToken,
+      metadata: {
+        sendgrid: {
+          message_id: result[0].headers['x-message-id']
+        }
+      }
     })
     console.log('Email record created: ', email.id)
   } catch (e) {
