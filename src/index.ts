@@ -6,7 +6,6 @@ import database from './config/database'
 
 const initializeApp = async () => {
   env.loadEnv()
-  sendGridClient.setApiKey(env.getOrDefault('SENDGRID_API_KEY', ''))
   await database.syncDatabase()
 }
 
